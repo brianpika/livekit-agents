@@ -5,7 +5,7 @@ import json
 import os
 import weakref
 from dataclasses import dataclass, replace
-from typing import Any, Literal, Optional, cast
+from typing import Any, Literal, Optional, TypedDict, cast
 
 import aiohttp
 
@@ -84,6 +84,12 @@ DEFAULT_MODEL = "speech-02-turbo"
 DEFAULT_VOICE_ID = "socialmedia_female_2_v1"
 
 
+class TimbreWeight(TypedDict):
+    """A voice with its weight for timbre blending."""
+    voice_id: str
+    weight: int
+
+
 # Note: "fluent" emotion is only supported by speech-2.6-* models
 TTSEmotion = Literal[
     "happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral", "fluent"
@@ -104,7 +110,8 @@ class _TTSOptions:
     api_key: str
     base_url: str
     model: TTSModel | str
-    voice_id: TTSVoice | str
+    voice_id: TTSVoice | str | None
+    timbre_weights: list[TimbreWeight] | None
     sample_rate: TTSSampleRate
     bitrate: TTSBitRate
     emotion: TTSEmotion | None
@@ -124,7 +131,8 @@ class TTS(tts.TTS):
         self,
         *,
         model: TTSModel | str = DEFAULT_MODEL,
-        voice: TTSVoice | str = DEFAULT_VOICE_ID,
+        voice: NotGivenOr[TTSVoice | str] = NOT_GIVEN,
+        timbre_weights: NotGivenOr[list[TimbreWeight]] = NOT_GIVEN,
         emotion: TTSEmotion | None = None,
         speed: float = 1.0,
         vol: float = 1.0,
@@ -149,6 +157,9 @@ class TTS(tts.TTS):
                 Available models: speech-2.6-hd, speech-2.6-turbo, speech-2.5-hd-preview,
                 speech-2.5-turbo-preview, speech-02-hd, speech-02-turbo, speech-01-hd, speech-01-turbo.
             voice (TTSVoice | str, optional): The voice to use. Defaults to DEFAULT_VOICE_ID.
+            timbre_weights (list[TimbreWeight], optional): A list of voices with weights for blending.
+                Each item should be a dict with "voice_id" and "weight" keys, e.g.
+                [{"voice_id": "voice_a", "weight": 5}, {"voice_id": "voice_b", "weight": 95}].
             emotion (TTSEmotion | None, optional): Emotion control for speech synthesis.
                 Options: "happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral", "fluent".
                 Note: "fluent" emotion is only supported by speech-2.6-* models. Defaults to None.
@@ -185,6 +196,10 @@ class TTS(tts.TTS):
         if not minimax_api_key:
             raise ValueError("MINIMAX_API_KEY must be set")
 
+        # Validate that at least one of voice or timbre_weights is provided
+        if not utils.is_given(voice) and not utils.is_given(timbre_weights):
+            raise ValueError("Either 'voice' or 'timbre_weights' must be provided")
+
         if not (0.5 <= speed <= 2.0):
             raise ValueError(f"speed must be between 0.5 and 2.0, but got {speed}")
         if intensity is not None and not (-100 <= intensity <= 100):
@@ -211,7 +226,8 @@ class TTS(tts.TTS):
 
         self._opts = _TTSOptions(
             model=model,
-            voice_id=voice,
+            voice_id=voice if utils.is_given(voice) else None,
+            timbre_weights=timbre_weights if utils.is_given(timbre_weights) else None,
             api_key=minimax_api_key,
             base_url=base_url,
             sample_rate=sample_rate,
@@ -243,6 +259,7 @@ class TTS(tts.TTS):
         *,
         model: NotGivenOr[TTSModel | str] = NOT_GIVEN,
         voice: NotGivenOr[TTSVoice | str] = NOT_GIVEN,
+        timbre_weights: NotGivenOr[list[TimbreWeight]] = NOT_GIVEN,
         emotion: NotGivenOr[TTSEmotion | None] = NOT_GIVEN,
         speed: NotGivenOr[float] = NOT_GIVEN,
         vol: NotGivenOr[float] = NOT_GIVEN,
@@ -259,6 +276,9 @@ class TTS(tts.TTS):
 
         if utils.is_given(voice):
             self._opts.voice_id = voice
+
+        if utils.is_given(timbre_weights):
+            self._opts.timbre_weights = timbre_weights
 
         if utils.is_given(emotion):
             self._opts.emotion = cast(Optional[TTSEmotion], emotion)
@@ -622,14 +642,17 @@ class ChunkedStream(tts.ChunkedStream):
 
 
 def _to_minimax_options(opts: _TTSOptions) -> dict[str, Any]:
+    voice_setting: dict[str, Any] = {
+        "speed": opts.speed,
+        "vol": opts.vol,
+        "pitch": opts.pitch,
+    }
+    if opts.voice_id is not None:
+        voice_setting["voice_id"] = opts.voice_id
+
     config: dict[str, Any] = {
         "model": opts.model,
-        "voice_setting": {
-            "voice_id": opts.voice_id,
-            "speed": opts.speed,
-            "vol": opts.vol,
-            "pitch": opts.pitch,
-        },
+        "voice_setting": voice_setting,
         "audio_setting": {
             "sample_rate": opts.sample_rate,
             "bitrate": opts.bitrate,
@@ -638,6 +661,9 @@ def _to_minimax_options(opts: _TTSOptions) -> dict[str, Any]:
         },
         "text_normalization": opts.text_normalization,
     }
+
+    if opts.timbre_weights is not None:
+        config["timbre_weights"] = opts.timbre_weights
 
     if opts.emotion is not None:
         config["voice_setting"]["emotion"] = opts.emotion
