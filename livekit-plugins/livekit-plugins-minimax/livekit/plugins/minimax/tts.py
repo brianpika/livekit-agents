@@ -131,8 +131,8 @@ class TTS(tts.TTS):
         self,
         *,
         model: TTSModel | str = DEFAULT_MODEL,
-        voice: NotGivenOr[TTSVoice | str] = NOT_GIVEN,
-        timbre_weights: NotGivenOr[list[TimbreWeight]] = NOT_GIVEN,
+        voice: TTSVoice | str = DEFAULT_VOICE_ID,
+        timbre_weights: list[TimbreWeight] | None = None,
         emotion: TTSEmotion | None = None,
         speed: float = 1.0,
         vol: float = 1.0,
@@ -222,8 +222,8 @@ class TTS(tts.TTS):
 
         self._opts = _TTSOptions(
             model=model,
-            voice_id=voice if utils.is_given(voice) else DEFAULT_VOICE_ID,
-            timbre_weights=timbre_weights if utils.is_given(timbre_weights) else None,
+            voice_id=voice,
+            timbre_weights=timbre_weights,
             api_key=minimax_api_key,
             base_url=base_url,
             sample_rate=sample_rate,
@@ -255,7 +255,7 @@ class TTS(tts.TTS):
         *,
         model: NotGivenOr[TTSModel | str] = NOT_GIVEN,
         voice: NotGivenOr[TTSVoice | str] = NOT_GIVEN,
-        timbre_weights: NotGivenOr[list[TimbreWeight]] = NOT_GIVEN,
+        timbre_weights: list[TimbreWeight] | None = None,
         emotion: NotGivenOr[TTSEmotion | None] = NOT_GIVEN,
         speed: NotGivenOr[float] = NOT_GIVEN,
         vol: NotGivenOr[float] = NOT_GIVEN,
@@ -656,7 +656,7 @@ def _to_minimax_options(opts: _TTSOptions) -> dict[str, Any]:
     }
 
     if opts.timbre_weights is not None:
-        config["timbre_weights"] = opts.timbre_weights
+        config["timber_weights"] = opts.timbre_weights
 
     if opts.emotion is not None:
         config["voice_setting"]["emotion"] = opts.emotion
