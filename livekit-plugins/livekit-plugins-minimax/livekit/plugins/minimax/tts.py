@@ -110,7 +110,7 @@ class _TTSOptions:
     api_key: str
     base_url: str
     model: TTSModel | str
-    voice_id: TTSVoice | str | None
+    voice_id: TTSVoice | str
     timbre_weights: list[TimbreWeight] | None
     sample_rate: TTSSampleRate
     bitrate: TTSBitRate
@@ -196,10 +196,6 @@ class TTS(tts.TTS):
         if not minimax_api_key:
             raise ValueError("MINIMAX_API_KEY must be set")
 
-        # Validate that at least one of voice or timbre_weights is provided
-        if not utils.is_given(voice) and not utils.is_given(timbre_weights):
-            raise ValueError("Either 'voice' or 'timbre_weights' must be provided")
-
         if not (0.5 <= speed <= 2.0):
             raise ValueError(f"speed must be between 0.5 and 2.0, but got {speed}")
         if intensity is not None and not (-100 <= intensity <= 100):
@@ -226,7 +222,7 @@ class TTS(tts.TTS):
 
         self._opts = _TTSOptions(
             model=model,
-            voice_id=voice if utils.is_given(voice) else None,
+            voice_id=voice if utils.is_given(voice) else DEFAULT_VOICE_ID,
             timbre_weights=timbre_weights if utils.is_given(timbre_weights) else None,
             api_key=minimax_api_key,
             base_url=base_url,
@@ -642,17 +638,14 @@ class ChunkedStream(tts.ChunkedStream):
 
 
 def _to_minimax_options(opts: _TTSOptions) -> dict[str, Any]:
-    voice_setting: dict[str, Any] = {
-        "speed": opts.speed,
-        "vol": opts.vol,
-        "pitch": opts.pitch,
-    }
-    if opts.voice_id is not None:
-        voice_setting["voice_id"] = opts.voice_id
-
     config: dict[str, Any] = {
         "model": opts.model,
-        "voice_setting": voice_setting,
+        "voice_setting": {
+            "voice_id": opts.voice_id,
+            "speed": opts.speed,
+            "vol": opts.vol,
+            "pitch": opts.pitch,
+        },
         "audio_setting": {
             "sample_rate": opts.sample_rate,
             "bitrate": opts.bitrate,
