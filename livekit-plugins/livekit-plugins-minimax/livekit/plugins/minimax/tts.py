@@ -255,7 +255,7 @@ class TTS(tts.TTS):
         *,
         model: NotGivenOr[TTSModel | str] = NOT_GIVEN,
         voice: NotGivenOr[TTSVoice | str] = NOT_GIVEN,
-        timbre_weights: list[TimbreWeight] | None = None,
+        timbre_weights: list[TimbreWeight] | None = NOT_GIVEN,
         emotion: NotGivenOr[TTSEmotion | None] = NOT_GIVEN,
         speed: NotGivenOr[float] = NOT_GIVEN,
         vol: NotGivenOr[float] = NOT_GIVEN,
